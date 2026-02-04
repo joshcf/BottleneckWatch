@@ -51,7 +51,11 @@ class PressureCalculator:
 
     def _normalize_page_faults(self, faults_per_sec: float) -> float:
         """
-        Normalize page faults to 0-100 scale using logarithmic mapping.
+        Normalize hard page faults to 0-100 scale using logarithmic mapping.
+
+        Hard page faults (page reads from disk) indicate genuine memory pressure.
+        On a healthy system these are typically 0-5/sec; under memory pressure
+        they can spike to 50-500+/sec.
 
         Scale:
         - 0 faults = 0 pressure
@@ -60,7 +64,7 @@ class PressureCalculator:
         - 1000+ faults = 100 pressure
 
         Args:
-            faults_per_sec: Raw page faults per second
+            faults_per_sec: Hard page faults (page reads) per second
 
         Returns:
             Normalized pressure value (0-100)

@@ -235,7 +235,7 @@ class SettingsWindow:
         pf_frame = ttk.Frame(frame)
         pf_frame.pack(fill=tk.X, pady=5)
 
-        ttk.Label(pf_frame, text="Page faults weight:").pack(side=tk.LEFT)
+        ttk.Label(pf_frame, text="Hard faults weight:").pack(side=tk.LEFT)
         self._weight_pf_var = tk.DoubleVar()
         pf_scale = ttk.Scale(
             pf_frame,

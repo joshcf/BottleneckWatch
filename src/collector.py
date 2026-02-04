@@ -110,33 +110,43 @@ class MetricsCollector:
 
     def _get_page_faults_per_sec_wmi(self) -> Optional[float]:
         """
-        Get page faults per second using WMI performance counters.
+        Get hard page faults per second using WMI performance counters.
+
+        Hard page faults (page reads) occur when a page must be fetched from
+        disk, indicating actual memory pressure. This excludes soft page faults
+        (resolved in-memory from standby list, zero-fill, or copy-on-write)
+        which are normal high-frequency operations that don't indicate pressure.
 
         Returns:
-            Page faults per second, or None if unavailable
+            Hard page faults (page reads) per second, or None if unavailable
         """
         if not self._ensure_wmi():
             return None
 
         try:
-            # Query Win32_PerfFormattedData_PerfOS_Memory for page faults/sec
+            # Query Win32_PerfFormattedData_PerfOS_Memory for hard faults/sec
             perf_data = self._wmi.Win32_PerfFormattedData_PerfOS_Memory()
             if perf_data:
-                # PageFaultsPersec includes both hard and soft page faults
-                return float(perf_data[0].PageFaultsPersec)
+                # PageReadsPersec counts hard page faults - disk read operations
+                # caused by page fault resolution. This directly measures when
+                # the system must go to disk because the page is not in RAM.
+                # (Unlike PageFaultsPersec which includes soft faults that are
+                # resolved in-memory and don't indicate memory pressure.)
+                return float(perf_data[0].PageReadsPersec)
         except Exception as e:
-            logger.debug(f"WMI page fault query failed: {e}")
+            logger.debug(f"WMI hard page fault query failed: {e}")
 
         return None
 
     def _get_page_faults_per_sec_psutil(self) -> float:
         """
-        Calculate page faults per second using psutil.
+        Estimate hard page faults per second using psutil as a fallback.
 
-        Uses delta calculation between samples.
+        Uses swap I/O (bytes swapped in/out) as a proxy for hard page faults,
+        since psutil doesn't expose the PageReadsPersec counter directly.
 
         Returns:
-            Estimated page faults per second
+            Estimated hard page faults per second
         """
         try:
             # Get system-wide swap statistics
@@ -200,7 +210,7 @@ class MetricsCollector:
             committed_limit = self._get_commit_limit() or vm.total
             committed_ratio = (committed_bytes / committed_limit) * 100 if committed_limit > 0 else 0
 
-            # Get page faults per second
+            # Get hard page faults per second (disk reads caused by page faults)
             # Try WMI first (more accurate), fall back to psutil estimation
             page_faults = self._get_page_faults_per_sec_wmi()
             if page_faults is None:
