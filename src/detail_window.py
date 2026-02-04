@@ -115,7 +115,7 @@ class DetailWindow:
         metrics_info = [
             ("pressure", "Memory Pressure:", "0%"),
             ("pressure_raw", "Raw Pressure:", "0%"),
-            ("page_faults", "Page Faults/sec:", "0"),
+            ("page_faults", "Hard Faults/sec:", "0"),
             ("available_ram", "Available RAM:", "0 GB (0%)"),
             ("committed", "Committed Memory:", "0 GB (0%)"),
             ("disk_busy", "Disk Busy:", "0%"),
