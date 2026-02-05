@@ -59,6 +59,9 @@ class DetailWindow:
         # Graph update timer
         self._update_job: Optional[str] = None
 
+        # Auto-refresh timer
+        self._auto_refresh_job: Optional[str] = None
+
         # Time period selection
         self._time_periods = {
             "Last Hour": 1,
@@ -166,6 +169,16 @@ class DetailWindow:
         # Refresh button
         refresh_btn = ttk.Button(selector_frame, text="Refresh", command=self._update_graph)
         refresh_btn.pack(side=tk.LEFT, padx=(10, 0))
+
+        # Auto-refresh checkbox
+        self._auto_refresh_var = tk.BooleanVar(value=False)
+        auto_refresh_cb = ttk.Checkbutton(
+            selector_frame,
+            text="Auto-refresh (30s)",
+            variable=self._auto_refresh_var,
+            command=self._on_auto_refresh_toggled
+        )
+        auto_refresh_cb.pack(side=tk.LEFT, padx=(10, 0))
 
         # Create matplotlib figure
         self._figure = Figure(figsize=(8, 6), dpi=100)
@@ -367,6 +380,39 @@ class DetailWindow:
         self._figure.tight_layout()
         self._canvas.draw()
 
+    def _on_auto_refresh_toggled(self) -> None:
+        """Handle auto-refresh checkbox toggle."""
+        if self._auto_refresh_var.get():
+            self._start_auto_refresh()
+        else:
+            self._stop_auto_refresh()
+
+    def _start_auto_refresh(self) -> None:
+        """Start auto-refreshing graphs every 30 seconds."""
+        logger.info("Auto-refresh enabled")
+        self._update_graph()
+        self._auto_refresh_tick()
+
+    def _stop_auto_refresh(self) -> None:
+        """Stop auto-refreshing graphs."""
+        logger.info("Auto-refresh disabled")
+        if self._auto_refresh_job and self._window:
+            self._window.after_cancel(self._auto_refresh_job)
+            self._auto_refresh_job = None
+
+    def _auto_refresh_tick(self) -> None:
+        """Schedule the next auto-refresh."""
+        if not self._window or not self._window.winfo_exists():
+            return
+        self._auto_refresh_job = self._window.after(30000, self._auto_refresh_fire)
+
+    def _auto_refresh_fire(self) -> None:
+        """Perform an auto-refresh and schedule the next one."""
+        if not self._window or not self._window.winfo_exists():
+            return
+        self._update_graph()
+        self._auto_refresh_tick()
+
     def _export_csv(self) -> None:
         """Export data to CSV file."""
         # Get time period
@@ -402,6 +448,11 @@ class DetailWindow:
         if self._update_job and self._window:
             self._window.after_cancel(self._update_job)
             self._update_job = None
+
+        # Cancel auto-refresh timer
+        if self._auto_refresh_job and self._window:
+            self._window.after_cancel(self._auto_refresh_job)
+            self._auto_refresh_job = None
 
         # Clean up matplotlib resources to prevent memory leaks
         if hasattr(self, '_figure') and self._figure is not None:

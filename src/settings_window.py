@@ -5,12 +5,17 @@ Provides configuration UI for all application settings.
 
 import tkinter as tk
 from tkinter import ttk, messagebox
-from typing import Callable, Optional
+from typing import Callable, Optional, TYPE_CHECKING
+import webbrowser
 import winreg
 
+from . import __version__, GITHUB_REPO
 from .config import ConfigManager
 from .database import DatabaseManager
 from .utils import get_logger, APP_NAME
+
+if TYPE_CHECKING:
+    from .updater import UpdateChecker
 
 logger = get_logger(__name__)
 
@@ -28,7 +33,9 @@ class SettingsWindow:
         database: DatabaseManager,
         on_close: Optional[Callable[[], None]] = None,
         on_settings_changed: Optional[Callable[[], None]] = None,
-        root: Optional[tk.Tk] = None
+        root: Optional[tk.Tk] = None,
+        updater: Optional["UpdateChecker"] = None,
+        on_apply_update: Optional[Callable[[], None]] = None
     ) -> None:
         """
         Initialize the Settings window.
@@ -39,11 +46,15 @@ class SettingsWindow:
             on_close: Callback when window is closed
             on_settings_changed: Callback when settings are applied
             root: Parent tkinter root window (if None, creates one)
+            updater: Update checker instance for the About tab
+            on_apply_update: Callback to trigger update application and shutdown
         """
         self.config = config
         self.database = database
         self._on_close = on_close
         self._on_settings_changed = on_settings_changed
+        self._updater = updater
+        self._on_apply_update = on_apply_update
 
         self._window: Optional[tk.Toplevel] = None
         self._root: Optional[tk.Tk] = root
@@ -93,6 +104,7 @@ class SettingsWindow:
         self._create_weights_tab()
         self._create_data_tab()
         self._create_startup_tab()
+        self._create_about_tab()
 
         # Create buttons
         self._create_buttons(main_frame)
@@ -417,6 +429,141 @@ class SettingsWindow:
             font=("Segoe UI", 8)
         )
         verbose_note.pack(anchor=tk.W, pady=(5, 0))
+
+    def _create_about_tab(self) -> None:
+        """Create the About tab with version info and update controls."""
+        frame = ttk.Frame(self._notebook, padding="15")
+        self._notebook.add(frame, text="About")
+
+        # App name and version
+        name_label = ttk.Label(
+            frame,
+            text=APP_NAME,
+            font=("Segoe UI", 14, "bold")
+        )
+        name_label.pack(anchor=tk.W, pady=(0, 2))
+
+        version_label = ttk.Label(
+            frame,
+            text=f"Version: {__version__}",
+            font=("Segoe UI", 10)
+        )
+        version_label.pack(anchor=tk.W, pady=(0, 5))
+
+        # GitHub link
+        repo_url = f"https://github.com/{GITHUB_REPO}"
+        link_label = ttk.Label(
+            frame,
+            text=repo_url,
+            foreground="blue",
+            cursor="hand2",
+            font=("Segoe UI", 9, "underline")
+        )
+        link_label.pack(anchor=tk.W, pady=(0, 10))
+        link_label.bind("<Button-1>", lambda e: webbrowser.open(repo_url))
+
+        # Separator
+        ttk.Separator(frame, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=10)
+
+        # Update section
+        update_frame = ttk.LabelFrame(frame, text="Updates", padding="10")
+        update_frame.pack(fill=tk.X, pady=(0, 10))
+
+        # Auto-update checkbox
+        self._auto_update_var = tk.BooleanVar(value=self.config.get("auto_update_check", True))
+        auto_check = ttk.Checkbutton(
+            update_frame,
+            text="Automatically check for updates on startup",
+            variable=self._auto_update_var,
+            command=self._on_auto_update_toggled
+        )
+        auto_check.pack(anchor=tk.W, pady=(0, 10))
+
+        # Check for updates button and status
+        btn_row = ttk.Frame(update_frame)
+        btn_row.pack(fill=tk.X)
+
+        self._check_update_btn = ttk.Button(
+            btn_row,
+            text="Check for Updates",
+            command=self._on_check_updates_clicked
+        )
+        self._check_update_btn.pack(side=tk.LEFT)
+
+        self._update_status_label = ttk.Label(btn_row, text="")
+        self._update_status_label.pack(side=tk.LEFT, padx=(10, 0))
+
+        # Update Now button (hidden initially)
+        self._update_now_btn = ttk.Button(
+            update_frame,
+            text="Update Now",
+            command=self._on_update_now_clicked
+        )
+        # Don't pack yet - shown when update is available
+
+        # If updater already has a pending update, show it
+        if self._updater and self._updater.latest_update:
+            self._show_update_available(self._updater.latest_update.version)
+
+    def _on_auto_update_toggled(self) -> None:
+        """Handle auto-update checkbox toggle."""
+        self.config.set("auto_update_check", self._auto_update_var.get())
+
+    def _on_check_updates_clicked(self) -> None:
+        """Handle Check for Updates button click."""
+        if not self._updater:
+            self._update_status_label.config(text="Update checker not available")
+            return
+
+        self._check_update_btn.config(state=tk.DISABLED)
+        self._update_status_label.config(text="Checking...")
+        self._update_now_btn.pack_forget()
+
+        def on_result(update_info):
+            # Schedule UI update on main thread
+            if self._window and self._window.winfo_exists():
+                self._window.after(0, lambda: self._handle_update_result(update_info))
+
+        self._updater.check_for_update_async(on_result)
+
+    def _handle_update_result(self, update_info) -> None:
+        """Handle the result of an update check (called on main thread)."""
+        self._check_update_btn.config(state=tk.NORMAL)
+
+        if update_info:
+            self._show_update_available(update_info.version)
+        else:
+            self._update_status_label.config(text="You are up to date.")
+            self._update_now_btn.pack_forget()
+
+    def _show_update_available(self, version: str) -> None:
+        """Show that an update is available."""
+        self._update_status_label.config(text=f"Update available: {version}")
+        self._update_now_btn.pack(anchor=tk.W, pady=(10, 0))
+
+    def _on_update_now_clicked(self) -> None:
+        """Handle Update Now button click."""
+        if not self._updater or not self._updater.latest_update:
+            return
+
+        update = self._updater.latest_update
+
+        result = messagebox.askyesno(
+            "Update Available",
+            f"Update to version {update.version}?\n\n"
+            f"The application will close and restart automatically.",
+            parent=self._window
+        )
+
+        if result and self._on_apply_update:
+            self._on_apply_update()
+
+    def show_about_tab(self) -> None:
+        """Show the settings window with the About tab selected."""
+        self.show()
+        if self._notebook:
+            # Select the last tab (About)
+            self._notebook.select(self._notebook.tabs()[-1])
 
     def _create_buttons(self, parent: ttk.Frame) -> None:
         """Create the action buttons."""

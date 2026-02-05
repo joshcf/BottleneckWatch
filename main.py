@@ -18,6 +18,7 @@ from src.database import DatabaseManager
 from src.tray import TrayIcon
 from src.detail_window import DetailWindow
 from src.settings_window import SettingsWindow
+from src.updater import UpdateChecker
 
 
 class BottleneckWatch:
@@ -37,6 +38,9 @@ class BottleneckWatch:
         self.database = DatabaseManager()
         self.collector = MetricsCollector()
         self.calculator = PressureCalculator(self.config)
+
+        # Auto-updater
+        self.updater = UpdateChecker(self.config)
 
         # Communication queue for thread-safe updates
         self.update_queue: Queue = Queue()
@@ -253,7 +257,9 @@ class BottleneckWatch:
                     database=self.database,
                     on_close=self._on_settings_window_closed,
                     on_settings_changed=self._on_settings_changed,
-                    root=self._root
+                    root=self._root,
+                    updater=self.updater,
+                    on_apply_update=self._apply_update
                 )
 
             self.settings_window.show()
@@ -275,6 +281,93 @@ class BottleneckWatch:
 
         # Apply log level setting
         set_log_level(self.config.get("verbose_logging", False))
+
+    def _on_check_updates(self) -> None:
+        """Handle Check for Updates from tray menu - opens settings to About tab."""
+        if self._root:
+            self._root.after(0, self._show_settings_about_tab)
+
+    def _show_settings_about_tab(self) -> None:
+        """Show settings window with About tab selected (must be called from main thread)."""
+        self.logger.info("Check for Updates clicked")
+
+        try:
+            if self.settings_window is None:
+                self.settings_window = SettingsWindow(
+                    config=self.config,
+                    database=self.database,
+                    on_close=self._on_settings_window_closed,
+                    on_settings_changed=self._on_settings_changed,
+                    root=self._root,
+                    updater=self.updater,
+                    on_apply_update=self._apply_update
+                )
+
+            self.settings_window.show_about_tab()
+
+        except Exception as e:
+            self.logger.error(f"Error showing settings about tab: {e}", exc_info=True)
+
+    # 7 days in milliseconds
+    _UPDATE_CHECK_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000
+
+    def _startup_update_check(self) -> None:
+        """Perform a background update check and schedule the next one in 7 days."""
+        self.logger.info("Starting background update check")
+
+        def on_result(update_info):
+            if update_info and self._root:
+                self._root.after(0, lambda: self._on_update_found(update_info))
+
+        self.updater.check_for_update_async(on_result)
+
+        # Schedule next check in 7 days
+        if self._root and not self.shutdown_event.is_set():
+            self._root.after(self._UPDATE_CHECK_INTERVAL_MS, self._startup_update_check)
+
+    def _on_update_found(self, update_info) -> None:
+        """Handle update found from background check (called on main thread)."""
+        self.logger.info(f"Update available: {update_info.version}")
+        if self.tray:
+            self.tray.set_update_available(True)
+
+    def _apply_update(self) -> None:
+        """Download and apply an available update, then shut down."""
+        if not self.updater.latest_update:
+            self.logger.warning("No update available to apply")
+            return
+
+        self.logger.info(f"Applying update to {self.updater.latest_update.version}")
+
+        update_info = self.updater.latest_update
+
+        # Run the download/extract/script generation in a thread to avoid blocking UI
+        def do_update():
+            script_path = self.updater.apply_update(update_info)
+            if script_path and self._root:
+                self._root.after(0, lambda: self._launch_update_and_shutdown(script_path))
+            elif self._root:
+                self._root.after(0, lambda: self._update_failed())
+
+        threading.Thread(target=do_update, name="UpdateApplyThread", daemon=True).start()
+
+    def _launch_update_and_shutdown(self, script_path) -> None:
+        """Launch the update script and shut down the app (called on main thread)."""
+        self.logger.info("Launching update script and shutting down")
+        if self.updater.launch_update_script(script_path):
+            self.shutdown()
+        else:
+            self._update_failed()
+
+    def _update_failed(self) -> None:
+        """Handle a failed update attempt."""
+        self.logger.error("Update failed")
+        from tkinter import messagebox
+        messagebox.showerror(
+            "Update Failed",
+            "Failed to download or apply the update.\n"
+            "Please try again later or update manually."
+        )
 
     def shutdown(self) -> None:
         """Gracefully shut down the application."""
@@ -334,6 +427,7 @@ class BottleneckWatch:
                 on_exit=self._on_exit,
                 on_view_details=self._on_view_details,
                 on_settings=self._on_settings,
+                on_check_updates=self._on_check_updates,
                 initial_pressure=initial_pressure
             )
 
@@ -342,6 +436,10 @@ class BottleneckWatch:
 
             # Start processing updates
             self._root.after(100, self._process_updates)
+
+            # Schedule background update check on startup if enabled
+            if self.config.get("auto_update_check", True):
+                self._root.after(5000, self._startup_update_check)
 
             # Run tkinter mainloop (this blocks until quit)
             self._root.mainloop()

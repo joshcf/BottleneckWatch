@@ -43,6 +43,7 @@ The goal is to help users make informed decisions about hardware upgrades by sho
 ### Right-Click Context Menu
 - **View Details**: Opens detailed monitoring window
 - **Settings**: Opens configuration panel
+- **Check for Updates**: Opens Settings window on the About tab
 - **Exit**: Cleanly shuts down application
 
 ### Detail View Window
@@ -59,6 +60,7 @@ The goal is to help users make informed decisions about hardware upgrades by sho
     - Regular I/O (non-memory disk activity)
     - Disk busy % (saturation indicator)
   - Configurable time periods (last hour, 6 hours, 24 hours, 7 days, 30 days)
+  - Auto-refresh option (30-second interval, toggled via checkbox)
 - **Data access**:
   - Current session data
   - Historical data loaded from disk
@@ -81,6 +83,11 @@ The goal is to help users make informed decisions about hardware upgrades by sho
 - **Startup**:
   - Auto-start with Windows toggle (default: DISABLED)
   - Verbose logging toggle (default: DISABLED) - when disabled, only errors are logged
+- **About**:
+  - Application name, version, and GitHub link
+  - Auto-check for updates on startup toggle
+  - Manual check for updates button
+  - Update Now button (shown when update is available)
 - **Apply/Save/Cancel** buttons
 
 ### Data Storage
@@ -174,32 +181,53 @@ This helps users understand:
 5. **Tray Icon** (`tray.py`)
    - Manages system tray presence
    - Generates coloured icons with percentage overlay
-   - Handles context menu
-   - Displays tooltip with current status
+   - Handles context menu (View Details, Settings, Check for Updates, Exit)
+   - Displays tooltip with current status and update availability
 
 6. **Detail View Window** (`detail_window.py`)
    - Real-time metric display
    - Three historical graphs (pressure, memory, disk I/O)
    - Time period selection
+   - Auto-refresh checkbox (30-second interval)
    - CSV data export
    - Proper matplotlib cleanup to prevent memory leaks
 
 7. **Settings Window** (`settings_window.py`)
-   - Configuration UI with tabbed interface
+   - Configuration UI with tabbed interface (Thresholds, Timing, Weights, Data, Startup, About)
    - Input validation
    - Auto-start registry management
    - Database cleanup tools
+   - About tab with version info, GitHub link, and update management
 
-8. **Main Application** (`main.py`)
-   - Coordinates all components
-   - Initial synchronous collection for immediate display
-   - Main event loop (tkinter)
-   - Graceful shutdown
+8. **Auto-Updater** (`updater.py`)
+   - Checks GitHub releases API for newer versions
+   - Downloads and extracts update zip to staging directory
+   - Generates a batch script to apply the update after the app exits
+   - Supports skipping versions and async checking
+   - Version comparison uses date-based format (YYYY-MM-DD-HH)
+
+9. **Release Script** (`release.py`)
+   - Generates date-based version strings from UTC time
+   - Updates `__version__` in `src/__init__.py`
+   - Git commit, tag, and push
+   - Creates distributable zip (excludes dev files)
+   - Creates GitHub release via `gh` CLI
+   - Supports `--dry-run` mode
+
+10. **Main Application** (`main.py`)
+    - Coordinates all components
+    - Initial synchronous collection for immediate display
+    - Main event loop (tkinter)
+    - Background update checks (on startup if enabled, then every 7 days)
+    - Update application flow (download, extract, script, restart)
+    - Graceful shutdown
 
 ### Threading Model
 - Main thread: GUI (tkinter mainloop, windows)
 - Collection thread: Data collection and processing
 - Tray thread: pystray runs in detached mode
+- Update check thread: Background GitHub API calls
+- Update apply thread: Download and extraction
 - Thread-safe communication via queues
 - WMI initialized per-thread due to COM apartment threading requirements
 
@@ -220,7 +248,9 @@ This helps users understand:
   },
   "data_retention_days": 30,
   "auto_start": false,
-  "verbose_logging": false
+  "verbose_logging": false,
+  "auto_update_check": true,
+  "skipped_version": null
 }
 ```
 
@@ -241,7 +271,16 @@ This helps users understand:
 - [x] Memory efficiency review
 - [x] GitHub release preparation
 
-### Future Enhancements (Post-v1)
+### Completed (Post-v1)
+- [x] Auto-update system (check, download, extract, apply via batch script)
+- [x] Release automation script (`release.py` with `--dry-run` support)
+- [x] About tab in Settings with version info and update controls
+- [x] "Check for Updates" tray menu item
+- [x] Background update checks (on startup, then every 7 days)
+- [x] Skip version support for updates
+- [x] Auto-refresh checkbox for detail view graphs (30-second interval)
+
+### Future Enhancements
 - Notification system with custom thresholds
 - CPU metrics and bottleneck detection
 - Network I/O monitoring
@@ -271,8 +310,9 @@ BottleneckWatch/
 ├── run_silent.bat           # Run without console (normal use)
 ├── uninstall.bat            # Cleanup script
 ├── main.py                  # Application entry point
+├── release.py               # Release automation script
 └── src/
-    ├── __init__.py
+    ├── __init__.py           # Version and GitHub repo constants
     ├── collector.py          # Metrics collection (memory + disk I/O)
     ├── calculator.py         # Pressure calculation
     ├── database.py           # SQLite interface with migrations
@@ -280,6 +320,7 @@ BottleneckWatch/
     ├── tray.py               # System tray icon
     ├── detail_window.py      # Detail view GUI with graphs
     ├── settings_window.py    # Settings GUI
+    ├── updater.py            # Auto-update from GitHub releases
     └── utils.py              # Shared utilities and logging
 ```
 
@@ -315,6 +356,8 @@ BottleneckWatch/
 - Database operations
 - Auto-start registry modifications
 - WMI initialization per thread
+- Update checks (start, result, download, apply)
+- Auto-refresh enable/disable
 
 **WARNING level**:
 - Failed metric collection (with recovery)
@@ -337,6 +380,8 @@ BottleneckWatch/
 3. **Page fault normalization**: Logarithmic scale (0→0, 10→33, 100→67, 1000→100)
 4. **Additional metrics**: Disk I/O added (page I/O vs regular I/O)
 5. **Icon size**: Fixed 64px, system scales as needed
+6. **Update mechanism**: Download zip from GitHub releases, extract to staging, generate batch script that waits for process exit then copies files over
+7. **Version format**: Date-based `YYYY-MM-DD-HH` (UTC), supports lexicographic comparison
 
 ---
 

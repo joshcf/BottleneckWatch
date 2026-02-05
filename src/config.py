@@ -24,7 +24,9 @@ DEFAULT_CONFIG = {
     },
     "data_retention_days": 30,
     "auto_start": False,
-    "verbose_logging": False
+    "verbose_logging": False,
+    "auto_update_check": True,
+    "skipped_version": None
 }
 
 

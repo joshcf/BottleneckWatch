@@ -51,5 +51,8 @@ htmlcov/
 .tox/
 .nox/
 
+# Release artifacts
+BottleneckWatch-*.zip
+
 # Claude Code
 .claude/

@@ -31,6 +31,7 @@ class TrayIcon:
         on_exit: Callable[[], None],
         on_view_details: Optional[Callable[[], None]] = None,
         on_settings: Optional[Callable[[], None]] = None,
+        on_check_updates: Optional[Callable[[], None]] = None,
         initial_pressure: float = 0.0
     ) -> None:
         """
@@ -41,14 +42,17 @@ class TrayIcon:
             on_exit: Callback for exit menu item
             on_view_details: Callback for View Details menu item
             on_settings: Callback for Settings menu item
+            on_check_updates: Callback for Check for Updates menu item
             initial_pressure: Initial pressure value to display (avoids showing 0 on startup)
         """
         self.config = config
         self._on_exit = on_exit
         self._on_view_details = on_view_details
         self._on_settings = on_settings
+        self._on_check_updates = on_check_updates
 
         self._current_pressure: float = initial_pressure
+        self._update_available: bool = False
         self._icon: Optional[pystray.Icon] = None
 
         # Try to load a font for the percentage text
@@ -158,6 +162,10 @@ class TrayIcon:
                 "Settings",
                 self._handle_settings
             ),
+            pystray.MenuItem(
+                "Check for Updates",
+                self._handle_check_updates
+            ),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem(
                 "Exit",
@@ -178,6 +186,12 @@ class TrayIcon:
         logger.debug("Settings menu item clicked")
         if self._on_settings:
             self._on_settings()
+
+    def _handle_check_updates(self, icon: pystray.Icon, item: pystray.MenuItem) -> None:
+        """Handle Check for Updates menu click."""
+        logger.debug("Check for Updates menu item clicked")
+        if self._on_check_updates:
+            self._on_check_updates()
 
     def _handle_exit(self, icon: pystray.Icon, item: pystray.MenuItem) -> None:
         """Handle Exit menu click."""
@@ -201,7 +215,10 @@ class TrayIcon:
         else:
             status = "Normal"
 
-        return f"{APP_NAME}\nMemory Pressure: {pressure:.0f}% ({status})"
+        tooltip = f"{APP_NAME}\nMemory Pressure: {pressure:.0f}% ({status})"
+        if self._update_available:
+            tooltip += "\n(Update available)"
+        return tooltip
 
     def update_pressure(self, pressure: float) -> None:
         """
@@ -264,6 +281,17 @@ class TrayIcon:
         self._icon.run_detached()
 
         logger.info("Tray icon running in background")
+
+    def set_update_available(self, available: bool) -> None:
+        """
+        Set whether an update is available (affects tooltip).
+
+        Args:
+            available: True if an update is available
+        """
+        self._update_available = available
+        if self._icon:
+            self._icon.title = self._get_tooltip()
 
     def stop(self) -> None:
         """Stop the tray icon."""

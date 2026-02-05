@@ -17,6 +17,7 @@ Unlike Task Manager which shows raw memory usage, BottleneckWatch identifies whe
 - **Historical Graphs**: View pressure trends over hours, days, or weeks
 - **Configurable Thresholds**: Tune sensitivity to match your needs
 - **Data Export**: Export historical data to CSV for analysis
+- **Auto-Updates**: Checks for new releases and updates in-place
 - **Low Overhead**: Designed to run continuously without impacting system performance
 - **No Admin Required**: Runs as a standard user
 
@@ -29,8 +30,9 @@ Unlike Task Manager which shows raw memory usage, BottleneckWatch identifies whe
 
 ### Quick Install (Recommended)
 
-1. Clone or download this repository
-2. Double-click `install.bat`
+1. Download the latest release zip from the [Releases page](https://github.com/joshcf/BottleneckWatch/releases/latest)
+2. Extract the zip to a folder of your choice (e.g., `C:\Tools\BottleneckWatch`)
+3. Double-click `install.bat`
 
 The install script will:
 - Check that Python is installed
@@ -41,9 +43,9 @@ The install script will:
 
 If you prefer to install manually:
 
-1. Clone or download this repository:
+1. Download and extract the latest release (see above), or clone the repository:
    ```
-   git clone https://github.com/yourusername/BottleneckWatch.git
+   git clone https://github.com/joshcf/BottleneckWatch.git
    cd BottleneckWatch
    ```
 
@@ -93,6 +95,7 @@ Once running, BottleneckWatch appears in your system tray:
 
 - **View Details**: Opens the detailed monitoring window with real-time metrics and historical graphs
 - **Settings**: Configure thresholds, sampling frequency, and other options
+- **Check for Updates**: Check for and install new versions
 - **Exit**: Close BottleneckWatch
 
 ### Detail View
@@ -131,6 +134,12 @@ The detail view includes a disk I/O graph that helps identify why your system mi
 - **Disk Busy %**: Overall disk saturation
 
 If disk is saturated and most I/O is memory-related, you likely need more RAM. If most I/O is regular, the slowness is just disk throughput (consider an SSD upgrade).
+
+## Updating
+
+BottleneckWatch checks for updates automatically on startup (configurable in Settings > About). When an update is available, you can install it from Settings > About or via the "Check for Updates" tray menu item. The application will download the update, close, apply the new files, and restart automatically.
+
+You can also update manually by downloading the latest release from the [Releases page](https://github.com/joshcf/BottleneckWatch/releases/latest) and extracting it over your existing installation.
 
 ## Data Storage
 

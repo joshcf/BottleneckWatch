@@ -1,3 +1,4 @@
 """BottleneckWatch - Windows system bottleneck detection utility."""
 
-__version__ = "1.0.0"
+__version__ = "dev"
+GITHUB_REPO = "joshcf/BottleneckWatch"
