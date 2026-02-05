@@ -48,6 +48,7 @@ EXCLUDE_EXTENSIONS = {
     ".pyc",
     ".pyo",
     ".log",
+    ".zip",
 }
 
 
