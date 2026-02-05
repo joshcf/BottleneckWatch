@@ -321,7 +321,8 @@ class UpdateChecker:
             pid = os.getpid()
             install_dir = str(INSTALL_DIR)
             staging_str = str(staging_dir)
-            run_bat = str(INSTALL_DIR / "run_silent.bat")
+            pythonw_exe = str(INSTALL_DIR / "venv" / "Scripts" / "pythonw.exe")
+            main_py = str(INSTALL_DIR / "main.py")
             updates_dir = str(UPDATES_DIR)
 
             # Check if requirements.txt exists in staging and differs from current
@@ -378,7 +379,7 @@ echo Cleaning up...
 rmdir /S /Q "{updates_dir}\\staging" 2>NUL
 
 echo Restarting BottleneckWatch...
-start "" "{run_bat}"
+start "" "{pythonw_exe}" "{main_py}"
 
 echo Update complete.
 (goto) 2>nul & del "%~f0"
